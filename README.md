@@ -1,4 +1,4 @@
-# ProektDbLadziata
+# ETL proces datasetu Chinook
 Toto úložisko obsahuje implementáciu procesu ETL softvéru Snowflake na analýzu údajov zo súboru údajov Chinook. Cieľom projektu je preskúmať hudobné preferencie používateľov, správanie zákazníkov a kľúčové finančné ukazovatele z údajov o predaji, skladbách, žánroch a zákazníkoch. Výsledný dátový model umožňuje viacrozmernú analýzu a vizualizáciu kľúčových metrík, ako je popularita žánrov, tržby podľa regiónov, časové trendy v nákupoch a preferencie zákazníkov.
 ## 1. Úvod a popis zdrojových dát
 Cieľom projektu je analyzovať údaje týkajúce sa hudobných skladieb, používateľov a ich nákupov. Táto analýza identifikuje kľúčové trendy v preferenciách zákazníkov, najpopulárnejších žánroch, skladateľoch a nákupnom správaní používateľov.
@@ -21,6 +21,7 @@ Východiskové údaje pochádzajú zo súboru údajov Chinook, ktorý obsahuje i
 
 Surové dáta sú organizované v relačnej štruktúre, ktorá je vizualizovaná prostredníctvom entitno-relačného diagramu (ERD):
 ![ModelChinook](https://github.com/user-attachments/assets/352a5d45-7ee4-4767-96c3-9b7c15506ebb)
+
 Obrázok 1 Entitno-relačná schéma Chinook
 
 ## 2 Dimenzionálny model
@@ -36,6 +37,7 @@ Navrhnutý bol hviezdicový model (star schema) pre efektívnu analýzu dát z _
 Diagram znázorňuje jasnú štruktúru modelu, ktorá zjednodušuje pochopenie a implementáciu v analytických nástrojoch.
 
 ![StarModelChinook](https://github.com/user-attachments/assets/dd9e0f4c-84ec-40dc-a506-8665ab9d58a9)
+
 Obrázok 2 Schéma hviezdy pre Chinook
 
 ## 3. ETL proces v Snowflake
@@ -170,6 +172,119 @@ DROP TABLE IF EXISTS PlaylistTrack_staging;
 DROP TABLE IF EXISTS Track_staging;
 ```
 ETL proces v Snowflake umožnil spracovanie pôvodných dát z formátu .csv do viacdimenzionálneho modelu typu hviezda. Tento proces zahŕňal čistenie, obohacovanie a reorganizáciu údajov, čím sa vytvoril model, ktorý umožňuje analýzu preferencií a správania používateľov. Výsledný model slúži ako základ pre tvorbu vizualizácií a reportov.
+
+## 4 Vizualizácia dát
+Dashboard obsahuje 6 vizualizácií, ktoré poskytujú prehľad o kľúčových metrikách a trendoch týkajúcich sa hudobných albumov, používateľov a ich nákupov. Tieto vizualizácie odpovedajú na dôležité otázky a umožňujú lepšie pochopiť správanie zákazníkov a ich preferencie v rámci platformy Chinook.
+<br />
+![dashboard_visualisations](https://github.com/user-attachments/assets/faabec55-9a20-4e76-a60e-405e348d7132)
+
+Obrázok 3 Dashboard Chinook datasetu
+
+#### __Graf 1: Príjmy podľa krajiny__
+Táto vizualizácia zobrazuje príjmy z predaja hudby podľa krajín. Umožňuje identifikovať, v ktorých krajinách sú najvyššie tržby a ktoré trhy sú najviac ziskové. Z výsledkov môžeme vidieť, že Spojené štáty generujú najvyššie príjmy v porovnaní s ostatnými krajinami. Tieto informácie môžu byť využité pri plánovaní marketingových a obchodných stratégií zameraných na konkrétne krajiny.
+__Príklad kódu:__
+```
+SELECT 
+    c.dim_country AS Country,
+    SUM(il.Quantity * il.UnitPrice) AS Revenue
+FROM fact_invoiceLine il
+JOIN dim_customers c ON c.dim_customer_id = il.CustomerId
+GROUP BY c.dim_country
+ORDER BY Revenue DESC;
+```
+
+#### Graf 2: Top 10 obľúbených žánrov
+Tento graf zobrazuje 10 najpopulárnejších žánrov podľa počtu predajov. Umožňuje identifikovať, ktoré hudobné žánre sú medzi používateľmi najobľúbenejšie. Z údajov je zrejmé, že žánre ako rock a pop sú najviac predávané. Tento graf môže byť využitý na lepšie zacielenie marketingových kampaní alebo na odporúčania skladieb v rámci platformy.
+__Príklad kódu:__
+```
+SELECT 
+    g.GenreId AS Genre,
+    COUNT(il.TrackId) AS SalesCount
+FROM fact_invoiceLine il
+JOIN dim_track t ON t.track_id = il.TrackId
+JOIN GENRE_STAGING g ON g.GenreId = t.genre_id
+GROUP BY g.GenreId
+ORDER BY SalesCount DESC
+LIMIT 10;
+```
+#### Graf 3: Trendy predaja podľa mesiacov
+Tento graf ukazuje vývoj príjmov z predaja hudby počas rôznych mesiacov v roku. Z vizualizácie je vidieť sezónne výkyvy v predajoch, kde napríklad v decembri môže byť zaznamenaný nárast predajov kvôli vianočným sviatkom. Tento trend môže byť využitý na plánovanie promočných akcií alebo zlepšenie ponuky počas obdobia, keď je predaj najvyšší.
+__Príklad kódu:__
+```
+SELECT 
+    d.monthAsString AS Month,
+    SUM(il.Quantity * il.UnitPrice) AS Revenue
+FROM fact_invoiceLine il
+JOIN DIM_DATE d ON d.date = CAST(il.date AS DATE)
+GROUP BY d.month, d.monthAsString
+ORDER BY d.month;
+```
+
+#### Graf 4: Analýza načasovania nákupov s podrobnosťami o príjmoch a množstve
+Tento graf zobrazuje, kedy počas dňa dochádza k najväčšiemu počtu nákupov a aký príjem tieto nákupy generujú. Z údajov je možné vidieť, že najväčšia aktivita sa vyskytuje počas večerných hodín, čo naznačuje, že používatelia často nakupujú po práci alebo počas voľného času. Tieto informácie môžu pomôcť lepšie naplánovať časovanie promočných kampaní.
+__Príklad kódu:__
+```
+SELECT 
+    t.Hour AS Hour,
+    COUNT(il.InvoiceLineId) AS PurchaseCount,
+    SUM(il.Quantity * il.UnitPrice) AS Revenue
+FROM fact_invoiceLine il
+JOIN DIM_TIME t ON t.Date = il.date
+GROUP BY t.Hour
+ORDER BY t.Hour;
+```
+
+#### Graf 5: Top 10 najobľúbenejších skladieb podľa príjmov a počtu predajov
+Tento graf ukazuje top 10 skladieb podľa počtu predajov a generovaných príjmov. Z výsledkov je zrejmé, že skladby ako Shape of You a Blinding Lights sú medzi používateľmi najviac predávané. Tieto informácie môžu byť využité na optimalizáciu zoznamu odporúčaní alebo pri plánovaní marketingových kampaní pre najpopulárnejšie skladby.
+__Príklad kódu:__
+```
+WITH TrackStats AS (
+    SELECT 
+        t.name AS TrackName,
+        COUNT(il.InvoiceLineId) AS SalesCount,
+        SUM(il.Quantity * il.UnitPrice) AS Revenue
+    FROM fact_invoiceLine il
+    JOIN dim_track t ON t.track_id = il.TrackId
+    GROUP BY t.name
+)
+SELECT 
+    TrackName,
+    SalesCount,
+    Revenue
+FROM TrackStats
+ORDER BY SalesCount DESC, Revenue DESC
+LIMIT 10;
+```
+
+#### Graf 6: Analýza preferencií zákazníkov podľa žánru a krajiny
+Tento graf zobrazuje, ako sa predaje podľa žánru líšia v závislosti od krajiny. Umožňuje identifikovať regionálne preferencie a zistiť, ktoré žánre sú populárne v konkrétnych krajinách. Tento graf môže byť využitý na prispôsobenie marketingových kampaní a ponúk pre rôzne krajiny.
+__Príklad kódu:__
+```
+SELECT 
+    c.dim_country AS Country,
+    g.GenreId AS Genre,
+    COUNT(il.InvoiceLineId) AS SalesCount
+FROM fact_invoiceLine il
+JOIN dim_customers c ON c.dim_customer_id = il.CustomerId
+JOIN dim_track t ON t.track_id = il.TrackId
+JOIN GENRE_STAGING g ON g.GenreId = t.genre_id
+GROUP BY c.dim_country, g.GenreId
+ORDER BY c.dim_country, SalesCount DESC;
+```
+
+Tieto vizualizácie poskytujú komplexný prehľad o správaní používateľov a trendoch predaja, čo môže byť užitočné pre optimalizáciu marketingových a obchodných stratégií na platforme Chinook.
+
+# Autor: Artsiom Ladziata
+
+
+
+
+
+
+
+
+
+
 
 
 
