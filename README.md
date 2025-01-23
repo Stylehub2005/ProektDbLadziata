@@ -274,7 +274,7 @@ ORDER BY c.dim_country, SalesCount DESC;
 
 Tieto vizualizácie poskytujú komplexný prehľad o správaní používateľov a trendoch predaja, čo môže byť užitočné pre optimalizáciu marketingových a obchodných stratégií na platforme Chinook.
 
-# Autor: Artsiom Ladziata
+### Autor: Artsiom Ladziata
 
 
 
