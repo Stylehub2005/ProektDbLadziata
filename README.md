@@ -134,6 +134,53 @@ GROUP BY CAST(invoicedate AS DATE),
          DATE_PART(week, invoicedate), 
          DATE_PART(quarter, invoicedate);
 ```
+#### __Transformácia :__
+ Tabuľka __DIM_DATE__ bola navrhnutá tak, aby uchovávala informácie o dátumoch. Obsahuje odvodené údaje, ako deň, deň v týždni, mesiac (textový aj číselný formát), rok, štvrťrok a týždeň. Táto dimenzia poskytuje možnosť podrobnej časovej analýzy. Vznikla extrakciou a spracovaním údajov zo stĺpca invoicedate v staging tabuľke invoice_staging.
+
+__Príklad kódu:__
+```
+CREATE OR REPLACE TABLE DIM_TRACK AS
+SELECT 
+    t.TrackId AS track_id,
+    t.Name AS name, 
+    a.AlbumId AS album_id,
+    t.Composer AS composer,
+    t.UnitPrice AS UnitPrice,
+    ar.ArtistId AS artist_id,
+    g.GenreId AS genre_id,
+    m.MediaTypeId AS MediType_id
+FROM track_staging t
+JOIN album_staging a ON a.AlbumId = t.AlbumId
+JOIN artist_staging ar ON ar.ArtistId = a.ArtistId
+JOIN genre_staging g ON t.GenreId = g.GenreId
+JOIN mediatype_staging m ON m.MediaTypeId = t.MediaTypeId;
+```
+#### __Transformácia2 :__
+ Tabuľka __DIM_DATE__ bola navrhnutá tak, aby uchovávala informácie o dátumoch. Obsahuje odvodené údaje, ako deň, deň v týždni, mesiac (textový aj číselný formát), rok, štvrťrok a týždeň. Táto dimenzia poskytuje možnosť podrobnej časovej analýzy. Vznikla extrakciou a spracovaním údajov zo stĺpca invoicedate v staging tabuľke invoice_staging.
+
+__Príklad kódu:__
+```
+CREATE OR REPLACE TABLE DIM_TRACK AS
+SELECT 
+    t.TrackId AS track_id,
+    t.Name AS name, 
+    a.AlbumId AS album_id,
+    t.Composer AS composer,
+    t.UnitPrice AS UnitPrice,
+    ar.ArtistId AS artist_id,
+    g.GenreId AS genre_id,
+    m.MediaTypeId AS MediType_id
+FROM track_staging t
+JOIN album_staging a ON a.AlbumId = t.AlbumId
+JOIN artist_staging ar ON ar.ArtistId = a.ArtistId
+JOIN genre_staging g ON t.GenreId = g.GenreId
+JOIN mediatype_staging m ON m.MediaTypeId = t.MediaTypeId;
+```
+
+ 
+
+
+
 __Vytvorenie faktovej tabuľky:__
 Faktová tabuľka __FACT_INVOICELINE__ bola navrhnutá na ukladanie informácií o jednotlivých položkách na faktúrach. Obsahuje metriky, ako sú množstvo, cena a prepojenie na dimenzie skladieb, zákazníkov, dátumov a časov.
 
