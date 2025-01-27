@@ -68,6 +68,10 @@ Na základe ETL procesu boli dáta zo staging tabuliek vyčistené, transformova
 #### __Transformácia údajov o skladbách:__ 
 Tabuľka __DIM_TRACK__ obsahuje detailné informácie o skladbách vrátane názvu, skladateľa, ceny, žánru, albumu a typu média. Táto dimenzia bola vytvorená kombináciou údajov z viacerých staging tabuliek, ako sú track_staging, album_staging, artist_staging, genre_staging a mediatype_staging. Táto transformácia umožňuje prepojenie skladieb s ich príslušnými kontextovými atribútmi.
 
+__Typ SCD: SCD Typ 2__
+
+Táto tabuľka uchováva údaje, ktoré sa môžu meniť, ako cena skladby, skladateľ alebo názov. Na uchovanie histórie zmien (napríklad zmena ceny) sa používa stratégia pridávania nových záznamov s časovými pečiatkami (začiatok a koniec platnosti záznamu).
+
 __Príklad kódu:__
 ```
 CREATE OR REPLACE TABLE DIM_TRACK AS
@@ -89,6 +93,10 @@ JOIN mediatype_staging m ON m.MediaTypeId = t.MediaTypeId;
 
 #### __Transformácia dátumových údajov:__
  Tabuľka __DIM_DATE__ bola navrhnutá tak, aby uchovávala informácie o dátumoch. Obsahuje odvodené údaje, ako deň, deň v týždni, mesiac (textový aj číselný formát), rok, štvrťrok a týždeň. Táto dimenzia poskytuje možnosť podrobnej časovej analýzy. Vznikla extrakciou a spracovaním údajov zo stĺpca invoicedate v staging tabuľke invoice_staging.
+ 
+__Typ SCD: SCD Typ 0__
+
+Tabuľka obsahuje nemenné údaje o dátumoch, ktoré sú vytvorené raz a viac sa neaktualizujú. Nie je potrebné sledovať zmeny, pretože atribúty dátumu (napríklad mesiac, deň v týždni) sú vždy statické.
 
 __Príklad kódu:__
 ```
@@ -134,52 +142,41 @@ GROUP BY CAST(invoicedate AS DATE),
          DATE_PART(week, invoicedate), 
          DATE_PART(quarter, invoicedate);
 ```
-#### __Transformácia :__
- Tabuľka __DIM_DATE__ bola navrhnutá tak, aby uchovávala informácie o dátumoch. Obsahuje odvodené údaje, ako deň, deň v týždni, mesiac (textový aj číselný formát), rok, štvrťrok a týždeň. Táto dimenzia poskytuje možnosť podrobnej časovej analýzy. Vznikla extrakciou a spracovaním údajov zo stĺpca invoicedate v staging tabuľke invoice_staging.
-
-__Príklad kódu:__
-```
-CREATE OR REPLACE TABLE DIM_TRACK AS
-SELECT 
-    t.TrackId AS track_id,
-    t.Name AS name, 
-    a.AlbumId AS album_id,
-    t.Composer AS composer,
-    t.UnitPrice AS UnitPrice,
-    ar.ArtistId AS artist_id,
-    g.GenreId AS genre_id,
-    m.MediaTypeId AS MediType_id
-FROM track_staging t
-JOIN album_staging a ON a.AlbumId = t.AlbumId
-JOIN artist_staging ar ON ar.ArtistId = a.ArtistId
-JOIN genre_staging g ON t.GenreId = g.GenreId
-JOIN mediatype_staging m ON m.MediaTypeId = t.MediaTypeId;
-```
-#### __Transformácia2 :__
- Tabuľka __DIM_DATE__ bola navrhnutá tak, aby uchovávala informácie o dátumoch. Obsahuje odvodené údaje, ako deň, deň v týždni, mesiac (textový aj číselný formát), rok, štvrťrok a týždeň. Táto dimenzia poskytuje možnosť podrobnej časovej analýzy. Vznikla extrakciou a spracovaním údajov zo stĺpca invoicedate v staging tabuľke invoice_staging.
-
-__Príklad kódu:__
-```
-CREATE OR REPLACE TABLE DIM_TRACK AS
-SELECT 
-    t.TrackId AS track_id,
-    t.Name AS name, 
-    a.AlbumId AS album_id,
-    t.Composer AS composer,
-    t.UnitPrice AS UnitPrice,
-    ar.ArtistId AS artist_id,
-    g.GenreId AS genre_id,
-    m.MediaTypeId AS MediType_id
-FROM track_staging t
-JOIN album_staging a ON a.AlbumId = t.AlbumId
-JOIN artist_staging ar ON ar.ArtistId = a.ArtistId
-JOIN genre_staging g ON t.GenreId = g.GenreId
-JOIN mediatype_staging m ON m.MediaTypeId = t.MediaTypeId;
-```
-
+#### __Transformácia  DIM_CUSTOMERS :__
+ Táto tabuľka obsahuje informácie o zákazníkoch. Obsahuje unikátne identifikátory zákazníkov, krajinu, v ktorej sa zákazník nachádza, a e-mailovú adresu zákazníka. Účelom je uľahčiť analýzu údajov súvisiacich so zákazníkmi, ako sú geografická segmentácia a kontaktovanie zákazníkov.
  
+__Typ SCD: SCD Typ 1__
 
+Zmeny, ako krajina alebo email, iba aktualizujú existujúce záznamy bez uchovávania histórie. Ak zákazník napríklad zmení email, staré údaje budú prepísané novými.
 
+__Príklad kódu:__
+```
+CREATE TABLE DIM_CUSTOMERS AS
+SELECT 
+    c.CUSTOMERID AS dim_customer_id,
+    c.Country AS dim_country,
+    c.Email AS email
+FROM CUSTOMER_STAGING c;
+```
+#### __Transformácia DIM_TIME  :__
+ Tabuľka obsahuje časové údaje extrahované z presného času fakturácie (invoicedate). Zahŕňa informácie o hodine, minúte a sekunde, čo umožňuje detailnú analýzu časových vzorcov na hodinovej alebo sekundovej úrovni. Každý časový záznam má svoj unikátny identifikátor.
+ 
+__Typ SCD: SCD Typ 0__
+
+Podobne ako DIM_DATE, aj táto tabuľka obsahuje statické údaje. Čas (hodiny, minúty, sekundy) je odvodený zo zdrojových údajov a nikdy sa nemení.
+
+__Príklad kódu:__
+```
+CREATE OR REPLACE TABLE DIM_TIME AS 
+SELECT DISTINCT
+    ROW_NUMBER() OVER (ORDER BY DATE_TRUNC('HOUR', InvoiceDate)) AS dim_time_id,
+    i.invoicedate as Date,
+    HOUR(invoicedate) AS Hour,
+    MINUTE(invoicedate) AS Minute,
+    SECOND (invoicedate) AS Second
+
+FROM INVOICE_STAGING i;
+```
 
 __Vytvorenie faktovej tabuľky:__
 Faktová tabuľka __FACT_INVOICELINE__ bola navrhnutá na ukladanie informácií o jednotlivých položkách na faktúrach. Obsahuje metriky, ako sú množstvo, cena a prepojenie na dimenzie skladieb, zákazníkov, dátumov a časov.
